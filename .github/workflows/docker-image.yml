@@ -1,0 +1,49 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - uses: actions/checkout@v6.0.2
+
+    - name: Build the Docker image
+      run: |
+        KUBECTL_ARCH='amd64'
+        ARCH=$(uname -p)
+        if [ "$ARCH" = "aarch64" ]; then
+          KUBECTL_ARCH='arm64'
+        fi
+        docker build --build-arg KUBECTL_ARCH=${KUBECTL_ARCH} \
+          --file Dockerfile \
+          --tag juniper/nita-jenkins:$(tr -d '\r\n[:space:]' < VERSION.txt) .
+
+    - name: Log in to GitHub Container Registry
+      if: github.event_name == 'push'
+      uses: docker/login-action@v4
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Push to GitHub Container Registry
+      if: github.event_name == 'push'
+      run: |
+        VERSION=$(tr -d '\r\n[:space:]' < VERSION.txt)
+        IMAGE=ghcr.io/${{ github.repository }}
+        docker tag juniper/nita-jenkins:${VERSION} ${IMAGE,,}:${VERSION}
+        docker tag juniper/nita-jenkins:${VERSION} ${IMAGE,,}:latest
+        docker push ${IMAGE,,}:${VERSION}
+        docker push ${IMAGE,,}:latest
