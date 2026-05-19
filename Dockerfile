@@ -25,12 +25,12 @@ COPY basic-security.groovy /var/jenkins_home/init.groovy.d/
 COPY write_yaml_files.py /usr/local/bin
 COPY robot.py /usr/local/bin
 COPY create_ansible_job_k8s.py /usr/local/bin
-RUN chmod 755 /usr/local/bin/create_ansible_job_k8s.py
 
 RUN jenkins-plugin-cli -f /usr/share/jenkins/ref/plugins.txt
 
 USER root
 
+RUN chmod 755 /usr/local/bin/create_ansible_job_k8s.py
 RUN chown -R jenkins:jenkins /var/jenkins_home/init.groovy.d/
 RUN DEBIAN_FRONTEND=noninteractive apt-get update -qq && \
     DEBIAN_FRONTEND=noninteractive apt-get install -yqq apt-utils git-core curl libssl-dev build-essential libssl-dev libffi-dev python3-dev python3-yaml python3-pip \
