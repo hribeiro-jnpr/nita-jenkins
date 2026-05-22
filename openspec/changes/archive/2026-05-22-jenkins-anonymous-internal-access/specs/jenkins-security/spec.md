@@ -1,18 +1,4 @@
-# Jenkins Security Specification
-
-## Purpose
-Defines how the Jenkins admin account is bootstrapped at startup and what
-authorisation strategy is applied, using environment-variable-supplied credentials.
-
-## Requirements
-
-### Requirement: Admin user created from environment variables
-The system SHALL create a Jenkins admin account using credentials read from `JENKINS_USER` and `JENKINS_PASS` environment variables at first boot.
-
-#### Scenario: Fresh container with no existing users
-- GIVEN Jenkins starts with an empty `jenkins_home` volume
-- WHEN the init Groovy script runs
-- THEN an admin account is created with the username and password from `JENKINS_USER` and `JENKINS_PASS`
+## MODIFIED Requirements
 
 ### Requirement: Existing admin password update
 The system SHALL detect whether the admin account already exists by comparing against the `JENKINS_USER` environment variable, updating the password if found, and creating the account only if it does not yet exist.
@@ -45,6 +31,8 @@ The system SHALL configure `GlobalMatrixAuthorizationStrategy` granting authenti
 - WHEN an HTTP request to configure Jenkins, manage credentials, or access system settings is made
 - THEN the request is rejected (HTTP 403)
 
+## ADDED Requirements
+
 ### Requirement: CSRF protection disabled
 The system SHALL disable the Jenkins CSRF crumb issuer so that internal service-to-service HTTP calls can trigger jobs without a pre-flight crumb fetch.
 
@@ -57,11 +45,3 @@ The system SHALL disable the Jenkins CSRF crumb issuer so that internal service-
 - GIVEN Jenkins completes its startup sequence
 - WHEN the init script runs
 - THEN `Jenkins.getInstance().getCrumbIssuer()` returns null
-
-### Requirement: Security bootstrapped via init script
-The system SHALL apply security configuration at startup via a Groovy init script placed in `/var/jenkins_home/init.groovy.d/`.
-
-#### Scenario: Security is active before any user interaction
-- GIVEN Jenkins completes its startup sequence
-- WHEN the first HTTP request arrives
-- THEN the security realm and authorisation strategy are already configured
