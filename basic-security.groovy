@@ -15,6 +15,7 @@ Third-Party Code: This code may depend on other components under separate copyri
 ******************************************************** */
 
 import hudson.security.*
+import hudson.security.csrf.*
 import jenkins.model.*
 
 def env = System.getenv()
@@ -24,7 +25,7 @@ def users = hudsonRealm.getAllUsers()
 users_s = users.collect { it.toString() }
 
 // Create the admin user account if it doesn't already exist.
-if ("{{ jenkins_admin_username }}" in users_s) {
+if (env.JENKINS_USER in users_s) {
     println "Admin user already exists - updating password"
 
     def user = hudson.model.User.get(env.JENKINS_USER);
@@ -37,8 +38,20 @@ else {
 
     hudsonRealm.createAccount(env.JENKINS_USER, env.JENKINS_PASS)
     instance.setSecurityRealm(hudsonRealm)
-
-    def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
-    instance.setAuthorizationStrategy(strategy)
-    instance.save()
 }
+
+// Configure GlobalMatrixAuthorizationStrategy:
+//   - admin user gets full administer rights
+//   - anonymous users get Job/Build, Job/Read, Job/Cancel for internal service calls
+def strategy = new GlobalMatrixAuthorizationStrategy()
+strategy.add(hudson.model.Hudson.ADMINISTER, env.JENKINS_USER)
+strategy.add(hudson.model.Item.BUILD, 'anonymous')
+strategy.add(hudson.model.Item.READ, 'anonymous')
+strategy.add(hudson.model.Item.CANCEL, 'anonymous')
+instance.setAuthorizationStrategy(strategy)
+
+// Disable CSRF protection — crumbs are only meaningful for browser-session auth,
+// not for internal service-to-service HTTP calls on port 8080.
+instance.setCrumbIssuer(null)
+
+instance.save()
