@@ -1,7 +1,12 @@
 ## MODIFIED Requirements
 
 ### Requirement: HTTPS configured via JENKINS_OPTS
-The system SHALL configure Jenkins via `JENKINS_OPTS` to serve its entire UI and API under the `/jenkins` context path using `--prefix=/jenkins`, in addition to the existing HTTP (8080) and HTTPS (8443) listener options.
+The system SHALL configure Jenkins via `JENKINS_OPTS` using the mounted keystore with password `nita123`, HTTPS on port 8443, and HTTP on port 8080, and SHALL additionally serve its entire UI and API under the `/jenkins` context path using `--prefix=/jenkins`.
+
+#### Scenario: Jenkins starts with HTTPS enabled
+- GIVEN the container starts with the keystore mounted
+- WHEN Jenkins reads `JENKINS_OPTS`
+- THEN it serves on `--httpsPort=8443` with the mounted keystore and password `nita123`
 
 #### Scenario: Jenkins serves under the /jenkins prefix
 - GIVEN the container starts with `--prefix=/jenkins` in `JENKINS_OPTS`
