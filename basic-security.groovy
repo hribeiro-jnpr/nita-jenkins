@@ -15,7 +15,7 @@ Third-Party Code: This code may depend on other components under separate copyri
 ******************************************************** */
 
 import hudson.security.*
-import hudson.security.csrf.*
+import hudson.security.csrf.DefaultCrumbIssuer
 import jenkins.model.*
 import jenkins.model.JenkinsLocationConfiguration
 
@@ -43,17 +43,14 @@ else {
 
 // Configure GlobalMatrixAuthorizationStrategy:
 //   - admin user gets full administer rights
-//   - anonymous users get Job/Build, Job/Read, Job/Cancel for internal service calls
+//   - anonymous users get Job/Read only
 def strategy = new GlobalMatrixAuthorizationStrategy()
 strategy.add(hudson.model.Hudson.ADMINISTER, env.JENKINS_USER)
-strategy.add(hudson.model.Item.BUILD, 'anonymous')
 strategy.add(hudson.model.Item.READ, 'anonymous')
-strategy.add(hudson.model.Item.CANCEL, 'anonymous')
 instance.setAuthorizationStrategy(strategy)
 
-// Disable CSRF protection — crumbs are only meaningful for browser-session auth,
-// not for internal service-to-service HTTP calls on port 8080.
-instance.setCrumbIssuer(null)
+// Keep CSRF protection enabled; exclude client IP so crumbs work behind proxies.
+instance.setCrumbIssuer(new DefaultCrumbIssuer(true))
 
 // Configure the external root URL so Jenkins advertises correct self-URLs
 // (including the /jenkins prefix) when running behind a TLS-terminating proxy.

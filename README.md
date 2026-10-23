@@ -7,7 +7,14 @@ Welcome to NITA, an open source platform for automating the building and testing
 
 # Release Notes
 
-The major change in this version is that the jenkins interface is now accessible from the webapp subdomain.
+Anonymous Jenkins access is now read-only: unauthenticated users can still
+browse jobs and logs, but cannot start or cancel builds. CSRF protection is
+enabled, so authenticated clients that trigger builds must submit a Jenkins
+crumb. The NITA webapp handles this automatically; users who previously used
+Jenkins' unauthenticated *Build Now* or cancel controls should use the webapp
+or sign in to Jenkins with an authorized account.
+
+The Jenkins interface is accessible through the NITA webapp proxy.
 
 Please refer to the [README][readme] for more details.
 
