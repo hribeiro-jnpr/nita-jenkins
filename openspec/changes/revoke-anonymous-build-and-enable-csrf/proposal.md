@@ -62,9 +62,11 @@ already means "a logged-in NITA user".
   not logged into Jenkins can browse jobs and read logs but can no longer press
   *Build Now* or abort a build. In NITA those operations are performed through
   the webapp.
-- **Ordering:** independent of the companion changes. Job triggering is
-  already authenticated and crumbed, and the webapp's console stream relies
-  only on anonymous `Job/Read`, which this change keeps. It is grouped with
-  `nita-webapp/gate-jenkins-behind-webapp-session` and
-  `nita/close-jenkins-direct-exposure` so the three are reviewed and released
-  as one hardening step.
+- **Ordering:** deploy this Jenkins hardening first, then
+  `nita/close-jenkins-direct-exposure`, then
+  `nita-webapp/gate-jenkins-behind-webapp-session`. Existing webapp build
+  requests are already authenticated and crumbed, and the console stream relies
+  only on anonymous `Job/Read`, which this change keeps. This sequence removes
+  anonymous mutation permissions first, closes the direct host-port route
+  second, and enables the proxy session gate only after proxy connectivity is
+  confirmed.

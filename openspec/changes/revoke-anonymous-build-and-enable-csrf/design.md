@@ -125,7 +125,10 @@ capability incoherent. The archive step will replace them in
    issuer, so pre-existing installs converge on restart).
 2. Verify (see tasks 3.x) anonymous POST build → 403, authenticated crumb fetch
    → 200, webapp trigger → 202 and the build runs, bootstrap scripts succeed.
-3. Release with the companion changes.
+3. Deploy this hardening first, followed by
+  `nita/close-jenkins-direct-exposure`, then
+  `nita-webapp/gate-jenkins-behind-webapp-session`. Confirm the proxy can reach
+  Jenkins before enabling the session gate.
 
 Rollback: revert `basic-security.groovy`; the next restart restores the
 previous grants and nulls the issuer.

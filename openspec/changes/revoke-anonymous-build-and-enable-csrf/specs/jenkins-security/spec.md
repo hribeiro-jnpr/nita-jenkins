@@ -10,8 +10,9 @@ The system SHALL configure `GlobalMatrixAuthorizationStrategy` granting the admi
 
 #### Scenario: Anonymous user can trigger, read, and cancel jobs
 - GIVEN no authentication credentials are provided
-- WHEN HTTP requests to read a job, trigger a build, and cancel a build are made on port 8080
-- THEN only the read request is permitted (HTTP 200)
+- WHEN HTTP requests to read a job, trigger a build, and cancel a build are
+	made on port 8080
+- THEN the read request is permitted (HTTP 200)
 - AND the trigger and cancel requests are rejected (HTTP 403)
 
 #### Scenario: Anonymous user can read jobs and builds
