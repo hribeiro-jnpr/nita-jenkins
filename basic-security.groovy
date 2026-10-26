@@ -18,35 +18,35 @@ import hudson.security.*
 import hudson.security.csrf.DefaultCrumbIssuer
 import jenkins.model.*
 import jenkins.model.JenkinsLocationConfiguration
+import org.jenkinsci.plugins.matrixauth.PermissionEntry
+import org.jenkinsci.plugins.reverse_proxy_auth.ReverseProxySecurityRealm
 
 def env = System.getenv()
 def instance = Jenkins.getInstance()
-def hudsonRealm = new HudsonPrivateSecurityRealm(false)
-def users = hudsonRealm.getAllUsers()
-users_s = users.collect { it.toString() }
+def serviceUser = env.JENKINS_USER ?: 'admin'
 
-// Create the admin user account if it doesn't already exist.
-if (env.JENKINS_USER in users_s) {
-    println "Admin user already exists - updating password"
-
-    def user = hudson.model.User.get(env.JENKINS_USER);
-    def password = hudson.security.HudsonPrivateSecurityRealm.Details.fromPlainPassword(env.JENKINS_PASS)
-    user.addProperty(password)
-    user.save()
-}
-else {
-    println "--> creating local admin user"
-
-    hudsonRealm.createAccount(env.JENKINS_USER, env.JENKINS_PASS)
-    instance.setSecurityRealm(hudsonRealm)
-}
+// Identity is asserted by the NITA proxy/webapp through X-Forwarded-User /
+// X-Forwarded-Groups (the webapp role). Jenkins holds no local passwords;
+// Basic auth is only honoured with a Jenkins API token.
+println "--> configuring header-based (reverse proxy) security realm"
+instance.setSecurityRealm(new ReverseProxySecurityRealm(
+    'X-Forwarded-User', null, null, 'X-Forwarded-Groups', '|', null, null,
+    null, null, false, null, null, null, null, null, null, null, null, null,
+    false, null, null))
 
 // Configure GlobalMatrixAuthorizationStrategy:
-//   - admin user gets full administer rights
-//   - anonymous users get Job/Read only
+//   - the service identity (JENKINS_USER) and webapp admins administer
+//   - any forwarded (authenticated) webapp user may read, build and cancel
+//   - anonymous gets Overall/Read + Job/Read only (Overall/Read is
+//     required to reach any page; without it Job/Read alone yields 403)
 def strategy = new GlobalMatrixAuthorizationStrategy()
-strategy.add(hudson.model.Hudson.ADMINISTER, env.JENKINS_USER)
-strategy.add(hudson.model.Item.READ, 'anonymous')
+strategy.add(Jenkins.ADMINISTER, PermissionEntry.user(serviceUser))
+strategy.add(Jenkins.ADMINISTER, PermissionEntry.group('admin'))
+[Jenkins.READ, hudson.model.Item.READ, hudson.model.Item.BUILD, hudson.model.Item.CANCEL].each {
+    strategy.add(it, PermissionEntry.group('authenticated'))
+}
+strategy.add(Jenkins.READ, PermissionEntry.user('anonymous'))
+strategy.add(hudson.model.Item.READ, PermissionEntry.user('anonymous'))
 instance.setAuthorizationStrategy(strategy)
 
 // Keep CSRF protection enabled; exclude client IP so crumbs work behind proxies.
