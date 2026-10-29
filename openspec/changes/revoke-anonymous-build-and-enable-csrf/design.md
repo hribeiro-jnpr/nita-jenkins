@@ -37,38 +37,39 @@ depend on the anonymous grants.
 
 **Goals**
 
-- No unauthenticated principal can start or abort a build.
+- No unauthenticated principal can read, start or abort anything.
+- Jenkins knows the webapp user (and role/teams) on every request, so builds
+  are attributed correctly and per-network visibility matches the webapp.
 - CSRF protection is on, and works through the nginx (later Traefik) proxy.
-- Every existing authenticated client keeps working unchanged.
-- The anonymous read path that the SPA's deep links rely on keeps working.
+- Existing `jenkins_home` volumes converge to the new realm/matrix on restart.
 
 **Non-Goals**
 
-- Mapping webapp identities to Jenkins principals or per-job visibility
-  (planned next wave; requires a security-realm change and a new plugin).
-- Removing anonymous `Job/Read`.
-- Rotating or externalising the admin credential.
-- Any change to ports, TLS, or the image.
+- Rotating or externalising a Jenkins credential (there is none any more).
+- Any change to ports or TLS.
 
 ## Decisions
 
-### Decision 1: Remove `Item.BUILD` and `Item.CANCEL` for `anonymous`; keep `Item.READ`
+### Decision 1: Header-based realm plus a project-based matrix instead of anonymous read
 
-**Choice:** Delete the two `strategy.add(..., 'anonymous')` lines for BUILD and
-CANCEL. Leave READ.
+**Choice:** `ReverseProxySecurityRealm` (header mode) and
+`ProjectMatrixAuthorizationStrategy`: service identity and group `admin` →
+Administer; `power_user` → Overall/Read, Job/Read, Job/Build, Job/Cancel;
+`authenticated` → Overall/Read; anonymous → nothing. Per-network jobs carry an
+`AuthorizationMatrixProperty` (owner read/build/cancel, `team-<id>` read)
+written by the webapp's `network_template_mgr`.
 
-**Rationale:** Build and cancel are the operations with blast radius; the
-webapp is the only legitimate initiator and it authenticates. Read is what the
-SPA deep links need, and — once the webapp session gate is in front of the
-proxy — "anonymous" at this layer is already a logged-in NITA user. Removing
-READ now would force a second login for every deep link and buy nothing the
-gate does not already provide; it is the natural next step once Jenkins knows
-who the user is (next wave).
+**Rationale:** Anonymous read behind the gate was a stop-gap: it made every
+logged-in NITA user equal inside Jenkins, so a regular user could browse and
+(while `authenticated` held Build) trigger any other user's jobs — which the
+webapp forbids. With identity in the headers the matrix can express the webapp
+model directly, and team membership changes apply on the next request because
+the groups header is computed per request. Management jobs intentionally have
+no per-job grants so regular users cannot drive `operation=delete` on others.
 
-**Rejected:** granting READ to `authenticated` only (breaks deep links today);
-keeping CANCEL for anonymous "so users can abort runaway jobs" (the webapp can
-grow an abort action if that is needed; it should not be an unauthenticated
-side door).
+**Rejected:** keeping anonymous `Job/Read` (leaks every job to every user once
+per-job grants exist); mirroring webapp users into the private realm (no SSO,
+no password sync); per-user API tokens (token lifecycle for every user).
 
 ### Decision 2: `DefaultCrumbIssuer(true)`
 

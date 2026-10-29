@@ -18,9 +18,15 @@ the same.
 
 ## What Changes
 
-- **Anonymous loses `Job/Build` and `Job/Cancel`.** The authorisation matrix
-  grants `anonymous` only `Job/Read`. Build and cancel require an authenticated
-  Jenkins principal; in NITA that is the webapp service account.
+- **Identity comes from the proxy.** The private user database is replaced by
+  the Reverse Proxy Auth realm in header mode: `X-Forwarded-User` is the user,
+  `X-Forwarded-Groups` carries the webapp role and one `team-<id>` group per
+  team. No passwords live in Jenkins; Basic auth only works with an API token.
+- **Authorisation mirrors the webapp.** A project-based matrix grants `admin`
+  Administer, `power_user` read/build/cancel on every job and `authenticated`
+  Overall/Read only; each per-network job carries its own matrix (owner
+  read/build/cancel, team read) written by the webapp. Anonymous has no access;
+  management jobs are reachable only by admins/power users.
 - **CSRF protection is enabled.** The init script installs a
   `DefaultCrumbIssuer` with `excludeClientIPFromCrumb=true` so crumbs remain
   valid across the reverse proxy hop. Build requests must carry a crumb — which
@@ -30,19 +36,16 @@ the same.
   *requires* the anonymous grants and *requires* CSRF to be disabled. Those
   requirements are replaced.
 
-Anonymous `Job/Read` is deliberately kept in this change: the SPA deep-links to
-Jenkins job and build pages, and removing read access would force a second
-login until the planned identity-propagation wave maps webapp users to Jenkins
-principals. Behind the webapp session gate, "anonymous" at the Jenkins layer
-already means "a logged-in NITA user".
+Jenkins is only reachable through the webapp-gated proxy and from the webapp
+pod (NetworkPolicy), which is the trust precondition of header-based identity.
 
 ## Capabilities
 
 ### Modified Capabilities
 
-- `jenkins-security`: the authorisation strategy grants `anonymous` read-only
-  access; the CSRF crumb issuer is enabled and configured for operation behind
-  a reverse proxy.
+- `jenkins-security`: header-based security realm; project-based matrix that
+  mirrors webapp roles, ownership and teams; anonymous has no access; the CSRF
+  crumb issuer is enabled and configured for operation behind a reverse proxy.
 
 ## Impact
 

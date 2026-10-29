@@ -1,30 +1,40 @@
 ## MODIFIED Requirements
 
 ### Requirement: Full-control-once-logged-in authorisation
-The system SHALL configure `GlobalMatrixAuthorizationStrategy` granting the service identity (the user named by `JENKINS_USER`) and the group `admin` `Overall/Administer`; granting the group `authenticated` `Overall/Read`, `Job/Read`, `Job/Build` and `Job/Cancel`; and granting anonymous users `Overall/Read` and `Job/Read` only (`Overall/Read` is the prerequisite for reaching any page; `Job/Read` alone yields HTTP 403). Anonymous users SHALL NOT hold `Job/Build`, `Job/Cancel`, or any other permission. Starting or aborting a build SHALL require an authenticated principal.
+The system SHALL configure `ProjectMatrixAuthorizationStrategy` whose global
+grants mirror the webapp roles: the service identity (`JENKINS_USER`) and the
+group `admin` get `Overall/Administer`; the group `power_user` gets
+`Overall/Read`, `Job/Read`, `Job/Build`, `Job/Cancel`; the group `authenticated`
+gets `Overall/Read` only; anonymous gets nothing. Access to individual jobs for
+other users SHALL come only from per-job `AuthorizationMatrixProperty` grants
+(inheriting the global ones) written by the webapp's job management.
 
 #### Scenario: Authenticated user has full access
 - GIVEN a request is authenticated as the service identity or as a user in the `admin` group
 - WHEN they attempt to create, run, configure, or delete a job
 - THEN the action is permitted
 
-#### Scenario: Authenticated non-admin user can build but not administer
-- GIVEN a request is authenticated as a user whose only group is `user` or `power_user`
-- WHEN they trigger or cancel a build with a valid crumb
+#### Scenario: Power user can read, build and cancel every job but not administer
+- GIVEN a request is authenticated as a user whose group is `power_user`
+- WHEN they open any job page or trigger/cancel a build with a valid crumb
 - THEN the action is permitted
 - AND a request to `/manage/` is rejected (HTTP 403)
 
+#### Scenario: Regular user sees only jobs granted to them
+- GIVEN a request is authenticated as a user whose group is `user`
+- WHEN they list jobs or open a job page with no per-job grant for them or their teams
+- THEN the job is absent from the list and the page is HTTP 404
+- AND a job page whose matrix grants `Job/Read` to that user, or to a `team-<id>` group they carry, is HTTP 200
+
 #### Scenario: Anonymous user can trigger, read, and cancel jobs
 - GIVEN no authentication credentials are provided
-- WHEN HTTP requests to read a job, trigger a build, and cancel a build are
-	made on port 8080
-- THEN the read request is permitted (HTTP 200)
-- AND the trigger and cancel requests are rejected (HTTP 403)
+- WHEN HTTP requests to read a job, trigger a build, and cancel a build are made on port 8080
+- THEN all three requests are rejected (HTTP 403); anonymous access is no longer offered
 
-#### Scenario: Anonymous user can read jobs and builds
-- GIVEN no authentication credentials are provided
-- WHEN an HTTP GET for a job page, a build page, a console log, or `/api/json` is made on port 8080
-- THEN the request is permitted (HTTP 200)
+#### Scenario: Anonymous user has no access
+- GIVEN no `X-Forwarded-User` header is present
+- WHEN HTTP requests to read the root, list jobs, read a job, trigger a build, or cancel a build are made on port 8080
+- THEN all of them are rejected (HTTP 403)
 
 #### Scenario: Anonymous user cannot trigger a build
 - GIVEN no authentication credentials are provided
