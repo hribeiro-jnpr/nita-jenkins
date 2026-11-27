@@ -12,11 +12,10 @@ SPDX-License-Identifier: Apache-2.0
 Third-Party Code: This code may depend on other components under separate copyright notice and license terms. Your use of the source code for those components is subject to the terms and conditions of the respective license as noted in the Third-Party source code file.
 
 ******************************************************** """
+import subprocess
+import sys
 import xml.etree.ElementTree as ET
-import os
 
-URL = 'https://127.0.0.1:8443/jenkins/'
-#URL = 'http://127.0.0.1:8080/jenkins/'
 JENKINS_CONFIG_XML = '/var/jenkins_home/config.xml'
 
 config = ET.parse(JENKINS_CONFIG_XML).getroot()
@@ -34,7 +33,14 @@ for lv in listViews:
             # print('View: ', view)
             # [print('Job: ', job.text) for job in elem.findall('string')]
             for job in elem.findall('string'):
-                # Jenkins CLI Command >>>> java -jar jenkins-cli.jar -s $JENKINS_URL add-job-to-view $VIEW $JOB
-                command = 'java -jar /var/jenkins_home/war/WEB-INF/jenkins-cli.jar -s ' + URL + ' add-job-to-view ' + view + ' ' + job.text + ' > /dev/null 2>&1'
-                # print(" >>>> command: " + command)
-                os.system(command)
+                subprocess.run(
+                    [
+                        sys.executable,
+                        '/usr/local/bin/jenkins_api.py',
+                        'views',
+                        'add-job',
+                        view,
+                        job.text,
+                    ],
+                    check=True,
+                )

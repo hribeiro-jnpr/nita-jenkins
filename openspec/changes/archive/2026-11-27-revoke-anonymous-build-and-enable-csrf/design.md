@@ -19,19 +19,16 @@ Who talks to this Jenkins, and how:
 
 | Client | Auth | Crumb-aware |
 |---|---|---|
-| webapp `invoke_job` (jenkinsapi) | user/pass | yes (`CrumbRequester`) |
-| webapp python-jenkins (status, history) | user/pass | n/a (GET only) |
-| webapp `robot_summary`, console stream* | Basic header | n/a (GET only) |
-| webapp bootstrap `ping/configure/add_jenkins_job.py` | Basic header | yes (cookie-jar + crumb fetch, tolerates 404) |
-| in-job `jenkins-cli.jar` (`network_template_mgr`) | `user:pass@` URL | not needed (CLI protocol) |
-| `nita-cmd jenkins …` via `kubectl exec` | `user:pass@` URL | not needed |
-| humans in the Jenkins UI | Jenkins session, or anonymous | browser form handles it |
+| webapp Django→Jenkins HTTP clients | `X-Forwarded-User` identity | state-changing requests fetch a crumb |
+| webapp bootstrap scripts | `X-Forwarded-User` identity | fetch and submit a crumb |
+| in-job `network_template_mgr` REST calls | `X-Forwarded-User` identity | fetch and submit a crumb |
+| `nita-cmd jenkins …` REST operations | `X-Forwarded-User: JENKINS_USER` | helper fetches a crumb for POSTs |
+| backup and restore helpers | `X-Forwarded-User: JENKINS_USER` | helper fetches a crumb for view updates |
+| humans in the Jenkins UI | webapp session forwarded by the proxy | browser form handles it |
 
-\* console stream gains its Basic header in the companion webapp change.
-
-Everything that *mutates* already authenticates and either sends a crumb or
-uses the CLI protocol. Only humans using the UI without logging into Jenkins
-depend on the anonymous grants.
+Every shipped client uses the header-based realm. State-changing HTTP
+operations fetch and send a crumb; no client relies on Jenkins CLI password
+authentication or `JENKINS_PASS`.
 
 ## Goals / Non-Goals
 
@@ -40,7 +37,7 @@ depend on the anonymous grants.
 - No unauthenticated principal can read, start or abort anything.
 - Jenkins knows the webapp user (and role/teams) on every request, so builds
   are attributed correctly and per-network visibility matches the webapp.
-- CSRF protection is on, and works through the nginx (later Traefik) proxy.
+- CSRF protection is on, and works through the Traefik proxy.
 - Existing `jenkins_home` volumes converge to the new realm/matrix on restart.
 
 **Non-Goals**
@@ -56,7 +53,7 @@ depend on the anonymous grants.
 `ProjectMatrixAuthorizationStrategy`: service identity and group `admin` →
 Administer; `power_user` → Overall/Read, Job/Read, Job/Build, Job/Cancel;
 `authenticated` → Overall/Read; anonymous → nothing. Per-network jobs carry an
-`AuthorizationMatrixProperty` (owner read/build/cancel, `team-<id>` read)
+`AuthorizationMatrixProperty` (owner and `team-<id>` read/build/cancel)
 written by the webapp's `network_template_mgr`.
 
 **Rationale:** Anonymous read behind the gate was a stop-gap: it made every
@@ -93,8 +90,9 @@ recommendation for proxied Jenkins.
 (jenkinsapi) fetches `/crumbIssuer/api/json` and sends the field it names —
 works. The bootstrap scripts do the same with a shared cookie jar — works
 (their "404 → proceed without crumb" branch simply stops being taken).
-`jenkins-cli.jar` uses its own protocol over HTTP and does not need crumbs.
-python-jenkins only does GETs here.
+python-jenkins only does GETs here. The NITA command and backup/restore helpers
+use the Jenkins REST API with the configured service identity and fetch a crumb
+before state-changing requests.
 
 ### Decision 3: Spec is rewritten, not patched around
 

@@ -13,26 +13,6 @@
 #
 # ********************************************************
 
-# Priority order is top down
-
-if [ -x "$(command -v kubectl)" ]; then
-
-    export POD=$(kubectl get pods -n nita --no-headers=true -l io.kompose.service=jenkins | grep Running | awk '{print $1}')
-    # Jenkins trusts X-Forwarded-User from inside the pod; the version is in the X-Jenkins header.
-    REMOTE='curl --silent --show-error --fail --head -H "X-Forwarded-User: ${JENKINS_USER:-admin}" http://localhost:8080/jenkins/api/ | tr -d "\r" | grep -i "^x-jenkins:" | cut -d" " -f2'
-    CMD="kubectl exec -i $POD -n nita -- /bin/bash -c '${REMOTE}'"
-
-elif [ -x "$(command -v docker)" ]; then
-
-    CMD='docker exec -it nitajenkins_jenkins_1 /usr/local/openjdk-8/bin/java -jar /var/jenkins_home/war/WEB-INF/jenkins-cli.jar -noCertificateCheck -s https://admin:admin@jenkins:8443/jenkins/ version'
-
-else
-
-  echo 'Error: cannot find required binaries.' >&2
-  exit 1
-
-fi
-
-[ ${_CLI_RUNNER_DEBUG} ] && echo ${CMD}>&2
-
-eval "${CMD}"
+SCRIPT_DIR=$(dirname "$(readlink -f -- "${BASH_SOURCE[0]}")")
+source "${SCRIPT_DIR}/jenkins_api.sh"
+jenkins_api_run version

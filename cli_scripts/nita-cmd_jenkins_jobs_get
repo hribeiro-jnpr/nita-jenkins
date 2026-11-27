@@ -13,31 +13,12 @@
 #
 # ********************************************************
 
-# Priority order is top down
+SCRIPT_DIR=$(dirname "$(readlink -f -- "${BASH_SOURCE[0]}")")
+source "${SCRIPT_DIR}/jenkins_api.sh"
 
-[ $# -eq 0 ] && {
-
-        echo "Error: please provide Jenkins job name as final argument"
-        exit 1
-
-}
-
-if [ -x "$(command -v kubectl)" ]; then
-
-    export POD=$(kubectl get pods -n nita --no-headers=true -l io.kompose.service=jenkins | grep Running | awk '{print $1}')
-    CMD="kubectl exec -it $POD -n nita -- /bin/bash -c 'java -jar /var/jenkins_home/war/WEB-INF/jenkins-cli.jar -noCertificateCheck -s https://admin:admin@jenkins:8443/jenkins/ get-job ${1}'"
-
-elif [ -x "$(command -v docker)" ]; then
-
-    CMD='docker exec -it nitajenkins_jenkins_1 /usr/local/openjdk-8/bin/java -jar /var/jenkins_home/war/WEB-INF/jenkins-cli.jar -noCertificateCheck -s https://admin:admin@jenkins:8443/jenkins/ get-job ${1} | tail -n+3'
-
-else
-
-  echo 'Error: cannot find required binaries.' >&2
-  exit 1
-
+if [ "$#" -ne 1 ]; then
+    echo "Error: provide a Jenkins job name." >&2
+    exit 1
 fi
 
-[ ${_CLI_RUNNER_DEBUG} ] && echo ${CMD}>&2
-
-eval "${CMD}"
+jenkins_api_run jobs get "$1"

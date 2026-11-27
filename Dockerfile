@@ -35,14 +35,13 @@ ARG KUBECTL_SHA256_ARM64=3d86f24401c41ae5a46ac50eef8865fe891d3647d324a0836f6c637
 
 ENV JAVA_OPTS='-Djenkins.install.runSetupWizard=false -Dhudson.model.DirectoryBrowserSupport.CSP=allow-same-origin'
 ENV JENKINS_USER=admin
-ENV JENKINS_PASS=admin
 ENV PATH="/opt/nita-venv/bin:$PATH"
 
 COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
 # Seeded via /usr/share/jenkins/ref; the .override suffix makes the entrypoint
 # re-copy it on every start so pre-existing jenkins_home volumes pick up changes.
 COPY basic-security.groovy /usr/share/jenkins/ref/init.groovy.d/basic-security.groovy.override
-COPY write_yaml_files.py robot.py create_ansible_job_k8s.py /usr/local/bin/
+COPY write_yaml_files.py robot.py create_ansible_job_k8s.py cli_scripts/jenkins_api.py /usr/local/bin/
 COPY --from=python-builder /opt/nita-venv /opt/nita-venv
 
 RUN jenkins-plugin-cli -f /usr/share/jenkins/ref/plugins.txt

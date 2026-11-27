@@ -16,15 +16,14 @@ read/build/cancel every job, and regular users only see the jobs of networks
 they own or that are shared with one of their teams (read/build/cancel, group
 `team-<id>`); the per-network grants are written by the
 webapp when it creates a network and whenever its team or owner changes.
-Anonymous access is disabled. `JENKINS_PASS` is no longer used; HTTP Basic
-authentication is only accepted with a Jenkins API token. Jenkins must therefore
-stay reachable only through the proxy and webapp.
-
-Anonymous Jenkins access is read-only: unauthenticated users can still
-browse jobs and logs, but cannot start or cancel builds. CSRF protection is
-enabled, so clients that trigger builds must submit a Jenkins crumb. The NITA
-webapp handles this automatically; users who previously used Jenkins'
-unauthenticated *Build Now* or cancel controls should use the webapp.
+Anonymous Jenkins access is disabled. HTTP Basic authentication is only
+accepted with a Jenkins API token. NITA's `nita-cmd jenkins` commands use the
+in-cluster REST API with the `JENKINS_USER` identity and a Jenkins crumb; they
+do not use `JENKINS_PASS` or the Jenkins CLI protocol. Jenkins must therefore
+stay reachable only through the proxy and trusted in-cluster services. CSRF
+protection is enabled, so state-changing HTTP requests must submit a crumb.
+Users who previously used unauthenticated *Build Now* or cancel controls should
+use the webapp.
 
 The Jenkins interface is accessible through the NITA webapp proxy.
 

@@ -3,8 +3,8 @@
 `basic-security.groovy` grants the `anonymous` principal `Job/Build`,
 `Job/Read` and `Job/Cancel`, and disables the CSRF crumb issuer. Both were
 introduced so the webapp could trigger jobs without credentials. The webapp no
-longer does that: every Django→Jenkins call authenticates with
-`JENKINS_SERVER_USER`/`JENKINS_SERVER_PASS` and obtains a crumb before building
+longer does that: every Django→Jenkins call asserts its service or acting-user
+identity through the reverse-proxy headers and obtains a crumb before building
 (`nita-webapp` capability `jenkins-trigger-security`), and the one remaining
 unauthenticated call — the console stream — is fixed in the companion
 `nita-webapp/gate-jenkins-behind-webapp-session` change.
@@ -49,27 +49,26 @@ pod (NetworkPolicy), which is the trust precondition of header-based identity.
 
 ## Impact
 
-- **Files:** `basic-security.groovy` (two permission lines removed, crumb
-  issuer replaced), `openspec/specs/jenkins-security/spec.md` (via archive),
+- **Files:** `basic-security.groovy` (realm, matrix and crumb issuer replaced), `openspec/specs/jenkins-security/spec.md` (via archive),
   `README.md` release notes.
-- **Image:** no new plugins; `matrix-auth` is already pinned. No change to
-  `plugins.txt`, `Dockerfile`, or ports.
-- **Clients that must already be compliant (verified):** the webapp's
-  `invoke_job` (authenticated + crumb), `ping_jenkins.py` /
-  `configure_jenkins.py` / `add_jenkins_job.py` (authenticated, crumb-aware
-  with a cookie jar), the in-job `jenkins-cli.jar` calls in
-  `network_template_mgr` (authenticated via `-s http://user:pass@…`), and the
-  `nita-cmd jenkins …` scripts (authenticated via `-s https://user:pass@…`).
-  `jenkins-cli.jar` does not use crumbs.
-- **Behavioural change for humans:** a user who can reach the Jenkins UI but is
-  not logged into Jenkins can browse jobs and read logs but can no longer press
-  *Build Now* or abort a build. In NITA those operations are performed through
-  the webapp.
-- **Ordering:** deploy this Jenkins hardening first, then
-  `nita/close-jenkins-direct-exposure`, then
-  `nita-webapp/gate-jenkins-behind-webapp-session`. Existing webapp build
-  requests are already authenticated and crumbed, and the console stream relies
-  only on anonymous `Job/Read`, which this change keeps. This sequence removes
-  anonymous mutation permissions first, closes the direct host-port route
-  second, and enables the proxy session gate only after proxy connectivity is
-  confirmed.
+- **Image:** adds `reverse-proxy-auth-plugin` to `plugins.txt`; the Dockerfile
+  seeds the init script as `.override`. No port changes.
+- **Clients updated in the companion webapp change:** the webapp's
+  `invoke_job`, console stream and Robot summary, the bootstrap scripts
+  (`ping_jenkins.py`, `configure_jenkins.py`, `add_jenkins_job.py`) and
+  `network_template_mgr` assert identity with `X-Forwarded-User` and fetch a
+  crumb for POSTs. Password Basic auth and `jenkins-cli.jar -s user:pass@…`
+  no longer authenticate. Every shipped `nita-cmd jenkins` REST operation and
+  the backup/restore helpers now use `X-Forwarded-User`; state-changing
+  requests fetch and submit a crumb. `JENKINS_PASS` is removed from the image
+  and Compose environment.
+- **Behavioural change for humans:** Jenkins is reached through the
+  webapp-gated proxy; a webapp session is the Jenkins session. Without it,
+  Jenkins returns 403 for every page, including job reads.
+- **Ordering:** this change and
+  `nita-webapp/gate-jenkins-behind-webapp-session` are interdependent and SHALL
+  be deployed together: the new realm rejects the old webapp's password
+  credentials, and the new webapp's identity headers mean nothing to the old
+  realm. Deploy `nita/close-jenkins-direct-exposure` first, so the
+  NetworkPolicy admits the proxy and the host-port bypass is gone before
+  Jenkins trusts forwarded identity headers.

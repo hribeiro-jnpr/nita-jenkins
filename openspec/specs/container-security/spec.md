@@ -1,7 +1,9 @@
 # container-security Specification
 
 ## Purpose
-TBD - created by archiving change enforce-container-security-baseline. Update Purpose after archive.
+Defines the container image vulnerability baseline: complete HIGH/CRITICAL
+evidence for every build, blocking delivery on unaccepted CRITICAL findings,
+and governed, time-limited exceptions.
 ## Requirements
 ### Requirement: Complete vulnerability evidence
 The image workflow SHALL produce a downloadable HIGH/CRITICAL vulnerability report for every amd64 and arm64 build, and accepted findings SHALL remain visible in that report.

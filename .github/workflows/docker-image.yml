@@ -33,6 +33,9 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v6.0.2
 
+      - name: Test Jenkins REST client
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.2.0
 
@@ -56,6 +59,7 @@ jobs:
             java -version
             java -jar /usr/share/jenkins/jenkins.war --version
             test "$(command -v python3)" = "/opt/nita-venv/bin/python3"
+            test -f /usr/local/bin/jenkins_api.py
             python3 -c "import ansible, jenkins, jenkinsapi, jnpr.junos, ncclient, yaml"
             python3 -m pip check
             write_yaml_files.py

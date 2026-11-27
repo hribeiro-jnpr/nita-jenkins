@@ -1,13 +1,11 @@
 ## MODIFIED Requirements
 
 ### Requirement: Full-control-once-logged-in authorisation
-The system SHALL configure `ProjectMatrixAuthorizationStrategy` whose global
-grants mirror the webapp roles: the service identity (`JENKINS_USER`) and the
-group `admin` get `Overall/Administer`; the group `power_user` gets
-`Overall/Read`, `Job/Read`, `Job/Build`, `Job/Cancel`; the group `authenticated`
-gets `Overall/Read` only; anonymous gets nothing. Access to individual jobs for
-other users SHALL come only from per-job `AuthorizationMatrixProperty` grants
-(inheriting the global ones) written by the webapp's job management.
+The system SHALL configure `ProjectMatrixAuthorizationStrategy` with global
+grants that mirror the webapp roles. The service identity (`JENKINS_USER`) and
+the group `admin` SHALL get `Overall/Administer`. The group `power_user` SHALL
+get `Overall/Read`, `Job/Read`, `Job/Build` and `Job/Cancel`. The group
+`authenticated` SHALL get `Overall/Read` only. Anonymous SHALL get nothing.
 
 #### Scenario: Authenticated user has full access
 - GIVEN a request is authenticated as the service identity or as a user in the `admin` group
@@ -19,12 +17,6 @@ other users SHALL come only from per-job `AuthorizationMatrixProperty` grants
 - WHEN they open any job page or trigger/cancel a build with a valid crumb
 - THEN the action is permitted
 - AND a request to `/manage/` is rejected (HTTP 403)
-
-#### Scenario: Regular user sees only jobs granted to them
-- GIVEN a request is authenticated as a user whose group is `user`
-- WHEN they list jobs or open a job page with no per-job grant for them or their teams
-- THEN the job is absent from the list and the page is HTTP 404
-- AND a job page whose matrix grants `Job/Read` to that user, or to a `team-<id>` group they carry, is HTTP 200
 
 #### Scenario: Anonymous user can trigger, read, and cancel jobs
 - GIVEN no authentication credentials are provided
@@ -53,17 +45,47 @@ other users SHALL come only from per-job `AuthorizationMatrixProperty` grants
 
 ## REMOVED Requirements
 
+### Requirement: Admin user created from environment variables
+**Reason**: Jenkins now uses the Reverse Proxy Auth realm and holds no local passwords, so no account is created from `JENKINS_USER` / `JENKINS_PASS`.
+**Migration**: The service identity is asserted with `X-Forwarded-User: $JENKINS_USER` by the webapp and bootstrap scripts. `JENKINS_PASS` is ignored.
+
+### Requirement: Existing admin password update
+**Reason**: There is no local password database to update under the header-based realm.
+**Migration**: None. Remove reliance on `JENKINS_PASS`; use an API token for any Basic-auth client.
+
 ### Requirement: CSRF protection disabled
 **Reason**: The grant existed so the webapp could trigger builds without a pre-flight crumb. The webapp now authenticates and fetches a crumb for every build request, so disabling CSRF protection only removes a defence for operators using the Jenkins UI.
-**Migration**: Clients that POST to Jenkins must fetch a crumb from `/crumbIssuer/api/json` on the same HTTP session and send it in the header named by `crumbRequestField`. The webapp (`CrumbRequester`) and its bootstrap scripts already do this; `jenkins-cli.jar` does not require a crumb.
+**Migration**: Clients that POST to Jenkins must assert an identity with `X-Forwarded-User`, fetch a crumb from `/crumbIssuer/api/json`, preserve the response cookie, and send the crumb in the header named by `crumbRequestField`. The webapp, bootstrap scripts, NITA CLI, and backup/restore helpers follow this flow.
 
 ## ADDED Requirements
+
+### Requirement: Per-job access is granted by the webapp
+Access to an individual job for users outside `admin` and `power_user` SHALL
+come only from that job's `AuthorizationMatrixProperty`, which inherits the
+global grants and is written by the webapp's job management.
+
+#### Scenario: Regular user sees only jobs granted to them
+- GIVEN a request is authenticated as a user whose group is `user`
+- WHEN they list jobs or open a job page with no per-job grant for them or their teams
+- THEN the job is absent from the list and the page is HTTP 404
+
+#### Scenario: Per-job grant allows access
+- GIVEN a job whose matrix grants `Job/Read` to a user, or to a `team-<id>` group they carry
+- WHEN that user opens the job page
+- THEN the response is HTTP 200
+
+#### Scenario: Management jobs are hidden from regular users
+- GIVEN a management job without per-job grants
+- WHEN a user whose group is `user` opens it
+- THEN the response is HTTP 404
 
 ### Requirement: Identity is asserted by the reverse proxy
 The system SHALL use the Reverse Proxy Auth realm in header mode: username from
 `X-Forwarded-User`, groups from `X-Forwarded-Groups` (`|`-delimited); requests
 without the header are anonymous. Jenkins SHALL hold no local passwords, and
-Basic authentication SHALL only be honoured with an API token.
+Basic authentication SHALL only be honoured with an API token. Shipped NITA
+command-line and backup/restore clients SHALL assert `JENKINS_USER` through
+`X-Forwarded-User`; state-changing REST requests SHALL include a valid crumb.
 
 #### Scenario: Forwarded user is authenticated with their groups
 - GIVEN a request on port 8080 carries `X-Forwarded-User: alice` and `X-Forwarded-Groups: power_user`
@@ -79,6 +101,12 @@ Basic authentication SHALL only be honoured with an API token.
 - GIVEN a request carries `Authorization: Basic` with `JENKINS_USER:JENKINS_PASS`
 - WHEN it requests `/manage/`
 - THEN the request is rejected (HTTP 401)
+
+#### Scenario: NITA command uses header identity and crumb
+- GIVEN an operator runs a shipped `nita-cmd jenkins` operation
+- WHEN the operation sends a state-changing request to Jenkins
+- THEN it asserts `JENKINS_USER` with `X-Forwarded-User`, fetches and submits a
+  crumb, and sends no password or Basic Authorization header
 
 #### Scenario: Existing home converges to the header realm
 - GIVEN a `jenkins_home` volume persisted by a previous release that used `HudsonPrivateSecurityRealm`
@@ -104,6 +132,6 @@ The system SHALL install a `DefaultCrumbIssuer` with `excludeClientIPFromCrumb` 
 - THEN the job is queued (HTTP 201)
 
 #### Scenario: Crumb survives the proxy hop
-- GIVEN a client reaches Jenkins through the nginx reverse proxy at `/jenkins/`
+- GIVEN a client reaches Jenkins through the NITA reverse proxy at `/jenkins/`
 - WHEN it fetches a crumb and posts a build with it
 - THEN the build is queued, regardless of which proxy connection carried each request
